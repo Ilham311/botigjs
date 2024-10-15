@@ -1,99 +1,109 @@
-export default {
-  async fetch(request, env) {
-    return await handleRequest(request, env);
+addEventListener('fetch', event => {
+  event.respondWith(handleRequest(event.request))
+})
+
+// Fungsi utama untuk menangani permintaan
+async function handleRequest(request) {
+  if (request.method !== 'POST') {
+    return new Response('Invalid method', { status: 405 });
   }
-}
 
-async function handleRequest(request, env) {
-  // Mendapatkan path URL
-  const { pathname } = new URL(request.url);
+  const updates = await request.json(); // Dapatkan updates dari webhook
+  if (updates.message && updates.message.text) {
+    const chatId = updates.message.chat.id;
+    const messageText = updates.message.text;
+    const [command, url] = messageText.split(' ');
 
-  if (pathname === "/webhook") {
-    // Mengelola permintaan webhook dari Telegram
-    const update = await request.json();
-    const message = update.message || update.edited_message;
-    
-    if (message) {
-      const chatId = message.chat.id;
-      const text = message.text;
-
-      if (text.startsWith("/ig")) {
-        const url = text.split(" ")[1];
-        const videoUrl = await getInstagramMedia(url);
-        if (videoUrl) {
-          await sendVideoToTelegram(chatId, videoUrl);
-        } else {
-          await sendMessageToTelegram(chatId, "Gagal mendapatkan video dari Instagram.");
-        }
-      } else if (text.startsWith("/fb")) {
-        const url = text.split(" ")[1];
-        const videoUrl = await getFacebookVideoUrl(url);
-        if (videoUrl) {
-          await sendVideoToTelegram(chatId, videoUrl);
-        } else {
-          await sendMessageToTelegram(chatId, "Gagal mendapatkan video dari Facebook.");
-        }
-      } else if (text.startsWith("/tw")) {
-        const url = text.split(" ")[1];
-        const videoUrl = await getTwitterVideoUrl(url);
-        if (videoUrl) {
-          await sendVideoToTelegram(chatId, videoUrl);
-        } else {
-          await sendMessageToTelegram(chatId, "Gagal mendapatkan video dari Twitter.");
-        }
-      } else if (text.startsWith("/tt")) {
-        const url = text.split(" ")[1];
-        const videoUrl = await getTiktokPlayUrl(url);
-        if (videoUrl) {
-          await sendVideoToTelegram(chatId, videoUrl);
-        } else {
-          await sendMessageToTelegram(chatId, "Gagal mendapatkan video dari TikTok.");
-        }
-      } else {
-        await sendMessageToTelegram(chatId, "Perintah tidak dikenal.");
+    if (command && url) {
+      switch (command) {
+        case '/ig':
+          return await handleInstagram(chatId, url);
+        case '/fb':
+          return await handleFacebook(chatId, url);
+        case '/tw':
+          return await handleTwitter(chatId, url);
+        case '/tt':
+          return await handleTiktok(chatId, url);
+        default:
+          return await sendMessage(chatId, "Perintah tidak dikenali.");
       }
     }
-
-    return new Response("OK", { status: 200 });
   }
 
-  return new Response("Not Found", { status: 404 });
+  return new Response('OK', { status: 200 });
 }
 
-async function sendMessageToTelegram(chatId, text) {
-  const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
-  const body = JSON.stringify({
+// Fungsi untuk mengirim pesan ke Telegram
+async function sendMessage(chatId, text) {
+  const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
+  const body = {
     chat_id: chatId,
-    text: text
-  });
-
-  return await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body
+    text: text,
+  };
+  await fetch(TELEGRAM_API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   });
 }
 
-async function sendVideoToTelegram(chatId, videoUrl) {
-  const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendVideo`;
-  const body = JSON.stringify({
-    chat_id: chatId,
-    video: videoUrl,
-    supports_streaming: true
-  });
-
-  return await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body
-  });
+// Fungsi untuk menangani Instagram
+async function handleInstagram(chatId, url) {
+  const videoUrl = await getInstagramMedia(url);
+  if (videoUrl) {
+    return await downloadAndUpload(chatId, videoUrl);
+  }
+  return await sendMessage(chatId, "Gagal mendapatkan video dari Instagram.");
 }
 
-// Fungsi untuk API Instagram
+// Fungsi untuk menangani Facebook
+async function handleFacebook(chatId, url) {
+  const videoUrl = await getFacebookVideoUrl(url);
+  if (videoUrl) {
+    return await downloadAndUpload(chatId, videoUrl);
+  }
+  return await sendMessage(chatId, "Gagal mendapatkan video dari Facebook.");
+}
+
+// Fungsi untuk menangani Twitter
+async function handleTwitter(chatId, url) {
+  const videoUrl = await getTwitterMedia(url);
+  if (videoUrl) {
+    return await downloadAndUpload(chatId, videoUrl);
+  }
+  return await sendMessage(chatId, "Gagal mendapatkan video dari Twitter.");
+}
+
+// Fungsi untuk menangani TikTok
+async function handleTiktok(chatId, url) {
+  const videoUrl = await getTiktokMedia(url);
+  if (videoUrl) {
+    return await downloadAndUpload(chatId, videoUrl);
+  }
+  return await sendMessage(chatId, "Gagal mendapatkan video dari TikTok.");
+}
+
+// Fungsi untuk mengunduh dan mengunggah video
+async function downloadAndUpload(chatId, videoUrl) {
+  const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}/sendVideo`;
+
+  // Karena Cloudflare Workers tidak memiliki file system, kita harus melakukan streaming langsung
+  const response = await fetch(videoUrl);
+  const blob = await response.blob();
+
+  const formData = new FormData();
+  formData.append("chat_id", chatId);
+  formData.append("video", blob, "video.mp4");
+
+  await fetch(TELEGRAM_API, {
+    method: 'POST',
+    body: formData
+  });
+
+  return new Response('OK', { status: 200 });
+}
+
+// Fungsi untuk mendapatkan URL video Instagram
 async function getInstagramMedia(instagramUrl) {
   const url = 'https://auto-download-all-in-one.p.rapidapi.com/v1/social/autolink';
   const headers = {
@@ -101,63 +111,46 @@ async function getInstagramMedia(instagramUrl) {
     'x-rapidapi-host': 'auto-download-all-in-one.p.rapidapi.com',
     'Content-Type': 'application/json',
   };
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ url: instagramUrl }),
-    });
-    const data = await response.json();
-    return data.medias[0].url;
-  } catch (error) {
-    console.error(error);
-    return null;
-  }
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: headers,
+    body: JSON.stringify({ url: instagramUrl })
+  });
+  const data = await response.json();
+  return data.medias[0]?.url || null;
 }
 
-// Fungsi untuk API Facebook
+// Fungsi untuk mendapatkan URL video Facebook
 async function getFacebookVideoUrl(fbUrl) {
-  const url = `https://vdfr.aculix.net/fb?url=${fbUrl}`;
+  const apiUrl = `https://vdfr.aculix.net/fb?url=${fbUrl}`;
   const headers = {
     'Authorization': 'erg4t5hyj6u75u64y5ht4gf3er4gt5hy6uj7k8l9',
-    'Content-Type': 'application/json',
+    'User-Agent': 'okhttp/4.12.0',
   };
-  try {
-    const response = await fetch(url, { headers });
-    const data = await response.json();
-    return data.media[0].video_url;
-  } catch (error) {
-    console.error(error);
-    return null;
-  }
+  const response = await fetch(apiUrl, { headers });
+  const data = await response.json();
+  return data.media?.[0]?.is_video ? data.media[0].video_url : null;
 }
 
-// Fungsi untuk API Twitter
-async function getTwitterVideoUrl(twitterUrl) {
+// Fungsi untuk mendapatkan URL video Twitter
+async function getTwitterMedia(twitterUrl) {
   const url = 'https://twitter-downloader-download-twitter-videos-gifs-and-images.p.rapidapi.com/status';
   const headers = {
     'x-rapidapi-key': '4f281a1be0msh5baa41ebeeda439p1d1139jsn3c26d05da8dd',
     'x-rapidapi-host': 'twitter-downloader-download-twitter-videos-gifs-and-images.p.rapidapi.com',
   };
-  try {
-    const response = await fetch(url, { method: 'GET', headers, params: { url: twitterUrl } });
-    const data = await response.json();
-    return data.media.video.videoVariants.find(v => v.content_type === 'video/mp4').url;
-  } catch (error) {
-    console.error(error);
-    return null;
-  }
+  const response = await fetch(url, {
+    headers,
+    params: { url: twitterUrl },
+  });
+  const data = await response.json();
+  return data.media.video.videoVariants.find(v => v.content_type === 'video/mp4').url;
 }
 
-// Fungsi untuk API TikTok
-async function getTiktokPlayUrl(tiktokUrl) {
+// Fungsi untuk mendapatkan URL video TikTok
+async function getTiktokMedia(tiktokUrl) {
   const url = `https://www.tikwm.com/api/?url=${tiktokUrl}`;
-  try {
-    const response = await fetch(url);
-    const data = await response.json();
-    return data.data.play;
-  } catch (error) {
-    console.error(error);
-    return null;
-  }
+  const response = await fetch(url);
+  const data = await response.json();
+  return data.data.play;
 }
