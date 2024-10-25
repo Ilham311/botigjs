@@ -81,11 +81,21 @@ async function getFacebookVideoUrl(fbUrl) {
 }
 
 // Fungsi untuk TikTok
-async function getTiktokPlayUrl(tiktokUrl) {
+async function getTiktokMedia(tiktokUrl) {
   const apiUrl = `https://www.tikwm.com/api/?url=${tiktokUrl}`;
   try {
     const response = await axios.get(apiUrl);
-    return response.data.data.play;
+    const data = response.data.data;
+
+    if (data.images && data.images.length > 0) {
+      // Jika terdapat gambar, ambil URL gambar
+      return { type: 'image', urls: data.images };
+    } else if (data.play) {
+      // Jika terdapat video, ambil URL video
+      return { type: 'video', urls: [data.play] };
+    } else {
+      return null;
+    }
   } catch (error) {
     console.error(error);
     return null;
@@ -145,8 +155,16 @@ async function handleTwitter(ctx, url) {
 }
 
 async function handleTiktok(ctx, url) {
-  const videoUrl = await getTiktokPlayUrl(url);
-  await downloadAndUpload(ctx, videoUrl);
+  const mediaData = await getTiktokMedia(url);
+
+  if (!mediaData || mediaData.urls.length === 0) {
+    return ctx.reply("Tidak ada media yang ditemukan.");
+  }
+
+  // Mengunduh dan mengunggah setiap media sesuai dengan jenisnya (video atau gambar)
+  for (const mediaUrl of mediaData.urls) {
+    await downloadAndUpload(ctx, mediaUrl);
+  }
 }
 
 // Menangani perintah unduh
