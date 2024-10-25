@@ -4,11 +4,11 @@ const fs = require('fs');
 const stream = require('stream');
 const { promisify } = require('util');
 const pipeline = promisify(stream.pipeline);
-const express = require('express'); // Import express
+const express = require('express');
 
 // Setup Express
 const app = express();
-const PORT = process.env.PORT || 3000; // Port untuk web server
+const PORT = process.env.PORT || 3000;
 
 // Endpoint sederhana untuk pengalihan
 app.get('/', (req, res) => {
@@ -35,8 +35,8 @@ async function twitterApi(twitterUrl) {
   };
   try {
     const response = await axios.get(url, { params: { url: twitterUrl }, headers });
-    const variants = response.data.media.video.videoVariants;
-    return variants.find(v => v.content_type === 'video/mp4').url;
+    const media = response.data.media.video.videoVariants.find(v => v.content_type === 'video/mp4');
+    return { url: media.url, type: 'video' };
   } catch (error) {
     console.error(error);
     return null;
@@ -55,7 +55,9 @@ async function getInstagramMedia(instagramUrl) {
   };
   try {
     const response = await axios.post(url, { url: instagramUrl }, { headers });
-    return response.data.medias[0].url;
+    const media = response.data.medias[0];
+    const type = media.type === 'video' ? 'video' : 'image';
+    return { url: media.url, type };
   } catch (error) {
     console.error(error);
     return null;
@@ -72,8 +74,9 @@ async function getFacebookVideoUrl(fbUrl) {
   };
   try {
     const response = await axios.get(url, { headers });
-    const media = response.data.media;
-    return media.length && media[0].is_video ? media[0].video_url : null;
+    const media = response.data.media[0];
+    const type = media.is_video ? 'video' : 'image';
+    return { url: media.video_url || media.image_url, type };
   } catch (error) {
     console.error(error);
     return null;
@@ -85,33 +88,38 @@ async function getTiktokPlayUrl(tiktokUrl) {
   const apiUrl = `https://www.tikwm.com/api/?url=${tiktokUrl}`;
   try {
     const response = await axios.get(apiUrl);
-    return response.data.data.play;
+    return { url: response.data.data.play, type: 'video' };
   } catch (error) {
     console.error(error);
     return null;
   }
 }
 
-// Fungsi untuk unduh dan unggah video
-async function downloadAndUpload(ctx, videoUrl) {
-  if (!videoUrl) {
-    return ctx.reply("Terjadi kesalahan saat mengambil URL video.");
+// Fungsi untuk unduh dan unggah video/gambar
+async function downloadAndUpload(ctx, media) {
+  if (!media || !media.url) {
+    return ctx.reply("Terjadi kesalahan saat mengambil URL media.");
   }
 
-  const uploadMessage = await ctx.reply("Video berhasil diunduh. Sedang mengunggah...");
+  const uploadMessage = await ctx.reply("Media berhasil diunduh. Sedang mengunggah...");
   try {
     const response = await axios({
-      url: videoUrl,
+      url: media.url,
       method: 'GET',
       responseType: 'stream'
     });
-    const filePath = './video.mp4';
+    const filePath = media.type === 'video' ? './video.mp4' : './image.jpg';
     await pipeline(response.data, fs.createWriteStream(filePath));
-    await ctx.replyWithVideo({ source: filePath });
+
+    if (media.type === 'video') {
+      await ctx.replyWithVideo({ source: filePath });
+    } else {
+      await ctx.replyWithPhoto({ source: filePath });
+    }
     fs.unlinkSync(filePath);  // Hapus file setelah diunggah
   } catch (error) {
     console.error(error);
-    ctx.reply("Gagal mengunggah video.");
+    ctx.reply("Gagal mengunggah media.");
   }
 
   // Hapus pesan upload
@@ -120,23 +128,23 @@ async function downloadAndUpload(ctx, videoUrl) {
 
 // Fungsi handler platform
 async function handleInstagram(ctx, url) {
-  const videoUrl = await getInstagramMedia(url);
-  await downloadAndUpload(ctx, videoUrl);
+  const media = await getInstagramMedia(url);
+  await downloadAndUpload(ctx, media);
 }
 
 async function handleFacebook(ctx, url) {
-  const videoUrl = await getFacebookVideoUrl(url);
-  await downloadAndUpload(ctx, videoUrl);
+  const media = await getFacebookVideoUrl(url);
+  await downloadAndUpload(ctx, media);
 }
 
 async function handleTwitter(ctx, url) {
-  const videoUrl = await twitterApi(url);
-  await downloadAndUpload(ctx, videoUrl);
+  const media = await twitterApi(url);
+  await downloadAndUpload(ctx, media);
 }
 
 async function handleTiktok(ctx, url) {
-  const videoUrl = await getTiktokPlayUrl(url);
-  await downloadAndUpload(ctx, videoUrl);
+  const media = await getTiktokPlayUrl(url);
+  await downloadAndUpload(ctx, media);
 }
 
 // Menangani perintah unduh
