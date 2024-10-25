@@ -10,10 +10,12 @@ const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Endpoint sederhana untuk pengalihan
 app.get('/', (req, res) => {
   res.send('<h1>Selamat datang di Website Sederhana!</h1><p>Bot Telegram sedang berjalan di latar belakang...</p>');
 });
 
+// Menjalankan Express server
 app.listen(PORT, () => {
   console.log(`Server berjalan di http://localhost:${PORT}`);
 });
@@ -22,7 +24,7 @@ app.listen(PORT, () => {
 const BOT_TOKEN = '7375007973:AAEqgy2z2J2-Xii_wOhea98BmwMSdW82bHM';
 const bot = new Telegraf(BOT_TOKEN);
 
-// Fungsi API Twitter
+// Fungsi untuk API Twitter
 async function twitterApi(twitterUrl) {
   const url = 'https://twitter-downloader-download-twitter-videos-gifs-and-images.p.rapidapi.com/status';
   const headers = {
@@ -33,15 +35,15 @@ async function twitterApi(twitterUrl) {
   };
   try {
     const response = await axios.get(url, { params: { url: twitterUrl }, headers });
-    const media = response.data.media.video.videoVariants.find(v => v.content_type === 'video/mp4');
-    return { url: media.url, type: 'video' };
+    const variants = response.data.media.video.videoVariants;
+    return variants.find(v => v.content_type === 'video/mp4').url;
   } catch (error) {
     console.error(error);
     return null;
   }
 }
 
-// Fungsi API Instagram
+// Fungsi untuk API Instagram
 async function getInstagramMedia(instagramUrl) {
   const url = 'https://auto-download-all-in-one.p.rapidapi.com/v1/social/autolink';
   const headers = {
@@ -53,16 +55,14 @@ async function getInstagramMedia(instagramUrl) {
   };
   try {
     const response = await axios.post(url, { url: instagramUrl }, { headers });
-    const media = response.data.medias[0];
-    const type = media.type === 'video' ? 'video' : 'image';
-    return { url: media.url, type };
+    return response.data.medias[0].url;
   } catch (error) {
     console.error(error);
     return null;
   }
 }
 
-// Fungsi API Facebook
+// Fungsi untuk API Facebook
 async function getFacebookVideoUrl(fbUrl) {
   const url = `https://vdfr.aculix.net/fb?url=${fbUrl}`;
   const headers = {
@@ -72,80 +72,82 @@ async function getFacebookVideoUrl(fbUrl) {
   };
   try {
     const response = await axios.get(url, { headers });
-    const media = response.data.media[0];
-    const type = media.is_video ? 'video' : 'image';
-    return { url: media.video_url || media.image_url, type };
+    const media = response.data.media;
+    return media.length && media[0].is_video ? media[0].video_url : null;
   } catch (error) {
     console.error(error);
     return null;
   }
 }
 
-// Fungsi API TikTok
+// Fungsi untuk TikTok
 async function getTiktokPlayUrl(tiktokUrl) {
   const apiUrl = `https://www.tikwm.com/api/?url=${tiktokUrl}`;
   try {
     const response = await axios.get(apiUrl);
-    return { url: response.data.data.play, type: 'video' };
+    return response.data.data.play;
   } catch (error) {
     console.error(error);
     return null;
   }
 }
 
-// Fungsi unduh dan unggah video/gambar
-async function downloadAndUpload(ctx, media) {
-  if (!media || !media.url) {
+// Fungsi untuk unduh dan unggah media dengan deteksi content-type
+async function downloadAndUpload(ctx, mediaUrl) {
+  if (!mediaUrl) {
     return ctx.reply("Terjadi kesalahan saat mengambil URL media.");
   }
 
   const uploadMessage = await ctx.reply("Media berhasil diunduh. Sedang mengunggah...");
   try {
     const response = await axios({
-      url: media.url,
+      url: mediaUrl,
       method: 'GET',
       responseType: 'stream'
     });
-    const filePath = media.type === 'video' ? './video.mp4' : './image.jpg';
+
+    const contentType = response.headers['content-type'];
+    const filePath = contentType.includes('video') ? './media.mp4' : './media.jpg';
+
     await pipeline(response.data, fs.createWriteStream(filePath));
 
-    // Pastikan unggah sesuai tipe media
-    if (media.type === 'video') {
+    if (contentType.includes('video')) {
       await ctx.replyWithVideo({ source: filePath });
-    } else if (media.type === 'image') {
+    } else if (contentType.includes('image')) {
       await ctx.replyWithPhoto({ source: filePath });
     } else {
       await ctx.reply("Jenis media tidak dikenali.");
     }
-    
-    fs.unlinkSync(filePath); // Hapus file setelah diunggah
+
+    fs.unlinkSync(filePath);  // Hapus file setelah diunggah
   } catch (error) {
     console.error(error);
     ctx.reply("Gagal mengunggah media.");
   }
 
+  // Hapus pesan upload
   setTimeout(() => ctx.deleteMessage(uploadMessage.message_id), 5000);
 }
 
 // Fungsi handler platform
 async function handleInstagram(ctx, url) {
-  const media = await getInstagramMedia(url);
-  await downloadAndUpload(ctx, media);
+  const videoUrl = await getInstagramMedia(url);
+  await downloadAndUpload(ctx, videoUrl);
 }
 
 async function handleFacebook(ctx, url) {
-  const media = await getFacebookVideoUrl(url);
-  await downloadAndUpload(ctx, media);
+  const videoUrl = await getFacebookVideoUrl(url);
+  await downloadAndUpload(ctx, videoUrl);
 }
 
 async function handleTwitter(ctx, url) {
-  const media = await twitterApi(url);
-  await downloadAndUpload(ctx, media);
+  const videoUrl = await twitterApi(url);
+  await downloadAndUpload(ctx, videoUrl);
 }
 
 async function handleTiktok(ctx, url) {
-  const media = await getTiktokPlayUrl(url);
-  await downloadAndUpload(ctx, media);
+  const videoUrl = await getTiktokPlayUrl(url);
+  await downloadAndUpload(ctx, videoUrl);
 }
 
 // Menangani perintah unduh
