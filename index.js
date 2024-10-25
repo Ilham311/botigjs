@@ -10,12 +10,10 @@ const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Endpoint sederhana untuk pengalihan
 app.get('/', (req, res) => {
   res.send('<h1>Selamat datang di Website Sederhana!</h1><p>Bot Telegram sedang berjalan di latar belakang...</p>');
 });
 
-// Menjalankan Express server
 app.listen(PORT, () => {
   console.log(`Server berjalan di http://localhost:${PORT}`);
 });
@@ -24,7 +22,7 @@ app.listen(PORT, () => {
 const BOT_TOKEN = '7375007973:AAEqgy2z2J2-Xii_wOhea98BmwMSdW82bHM';
 const bot = new Telegraf(BOT_TOKEN);
 
-// Fungsi untuk API Twitter
+// Fungsi API Twitter
 async function twitterApi(twitterUrl) {
   const url = 'https://twitter-downloader-download-twitter-videos-gifs-and-images.p.rapidapi.com/status';
   const headers = {
@@ -43,7 +41,7 @@ async function twitterApi(twitterUrl) {
   }
 }
 
-// Fungsi untuk API Instagram
+// Fungsi API Instagram
 async function getInstagramMedia(instagramUrl) {
   const url = 'https://auto-download-all-in-one.p.rapidapi.com/v1/social/autolink';
   const headers = {
@@ -64,7 +62,7 @@ async function getInstagramMedia(instagramUrl) {
   }
 }
 
-// Fungsi untuk API Facebook
+// Fungsi API Facebook
 async function getFacebookVideoUrl(fbUrl) {
   const url = `https://vdfr.aculix.net/fb?url=${fbUrl}`;
   const headers = {
@@ -83,7 +81,7 @@ async function getFacebookVideoUrl(fbUrl) {
   }
 }
 
-// Fungsi untuk TikTok
+// Fungsi API TikTok
 async function getTiktokPlayUrl(tiktokUrl) {
   const apiUrl = `https://www.tikwm.com/api/?url=${tiktokUrl}`;
   try {
@@ -95,7 +93,7 @@ async function getTiktokPlayUrl(tiktokUrl) {
   }
 }
 
-// Fungsi untuk unduh dan unggah video/gambar
+// Fungsi unduh dan unggah video/gambar
 async function downloadAndUpload(ctx, media) {
   if (!media || !media.url) {
     return ctx.reply("Terjadi kesalahan saat mengambil URL media.");
@@ -111,18 +109,21 @@ async function downloadAndUpload(ctx, media) {
     const filePath = media.type === 'video' ? './video.mp4' : './image.jpg';
     await pipeline(response.data, fs.createWriteStream(filePath));
 
+    // Pastikan unggah sesuai tipe media
     if (media.type === 'video') {
       await ctx.replyWithVideo({ source: filePath });
-    } else {
+    } else if (media.type === 'image') {
       await ctx.replyWithPhoto({ source: filePath });
+    } else {
+      await ctx.reply("Jenis media tidak dikenali.");
     }
-    fs.unlinkSync(filePath);  // Hapus file setelah diunggah
+    
+    fs.unlinkSync(filePath); // Hapus file setelah diunggah
   } catch (error) {
     console.error(error);
     ctx.reply("Gagal mengunggah media.");
   }
 
-  // Hapus pesan upload
   setTimeout(() => ctx.deleteMessage(uploadMessage.message_id), 5000);
 }
 
