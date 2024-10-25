@@ -24,6 +24,25 @@ app.listen(PORT, () => {
 const BOT_TOKEN = '7375007973:AAEqgy2z2J2-Xii_wOhea98BmwMSdW82bHM';
 const bot = new Telegraf(BOT_TOKEN);
 
+// Fungsi untuk API Instagram, menangani banyak media
+async function getInstagramMedia(instagramUrl) {
+  const url = 'https://auto-download-all-in-one.p.rapidapi.com/v1/social/autolink';
+  const headers = {
+    'x-rapidapi-key': 'da2822c5a9msh3665ef1bee3ad2cp1ab549jsn457a3b017e06',
+    'x-rapidapi-host': 'auto-download-all-in-one.p.rapidapi.com',
+    'Content-Type': 'application/json',
+    'Accept-Encoding': 'gzip',
+    'User-Agent': 'okhttp/3.14.9'
+  };
+  try {
+    const response = await axios.post(url, { url: instagramUrl }, { headers });
+    return response.data.medias.map(media => media.url); // Ambil semua URL media
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
+
 // Fungsi untuk API Twitter
 async function twitterApi(twitterUrl) {
   const url = 'https://twitter-downloader-download-twitter-videos-gifs-and-images.p.rapidapi.com/status';
@@ -37,25 +56,6 @@ async function twitterApi(twitterUrl) {
     const response = await axios.get(url, { params: { url: twitterUrl }, headers });
     const variants = response.data.media.video.videoVariants;
     return variants.find(v => v.content_type === 'video/mp4').url;
-  } catch (error) {
-    console.error(error);
-    return null;
-  }
-}
-
-// Fungsi untuk API Instagram
-async function getInstagramMedia(instagramUrl) {
-  const url = 'https://auto-download-all-in-one.p.rapidapi.com/v1/social/autolink';
-  const headers = {
-    'x-rapidapi-key': 'da2822c5a9msh3665ef1bee3ad2cp1ab549jsn457a3b017e06',
-    'x-rapidapi-host': 'auto-download-all-in-one.p.rapidapi.com',
-    'Content-Type': 'application/json',
-    'Accept-Encoding': 'gzip',
-    'User-Agent': 'okhttp/3.14.9'
-  };
-  try {
-    const response = await axios.post(url, { url: instagramUrl }, { headers });
-    return response.data.medias[0].url;
   } catch (error) {
     console.error(error);
     return null;
@@ -94,11 +94,6 @@ async function getTiktokPlayUrl(tiktokUrl) {
 
 // Fungsi untuk unduh dan unggah media dengan deteksi content-type
 async function downloadAndUpload(ctx, mediaUrl) {
-  if (!mediaUrl) {
-    return ctx.reply("Terjadi kesalahan saat mengambil URL media.");
-  }
-
-  const uploadMessage = await ctx.reply("Media berhasil diunduh. Sedang mengunggah...");
   try {
     const response = await axios({
       url: mediaUrl,
@@ -115,26 +110,30 @@ async function downloadAndUpload(ctx, mediaUrl) {
       await ctx.replyWithVideo({ source: filePath });
     } else if (contentType.includes('image')) {
       await ctx.replyWithPhoto({ source: filePath });
-    } else {
-      await ctx.reply("Jenis media tidak dikenali.");
     }
 
-    fs.unlinkSync(filePath);  // Hapus file setelah diunggah
+    fs.unlinkSync(filePath); // Hapus file setelah diunggah
   } catch (error) {
     console.error(error);
     ctx.reply("Gagal mengunggah media.");
   }
-
-  // Hapus pesan upload
-  setTimeout(() => ctx.deleteMessage(uploadMessage.message_id), 5000);
 }
 
-// Fungsi handler platform
+// Fungsi handler khusus Instagram untuk mengunduh dan mengunggah semua media
 async function handleInstagram(ctx, url) {
-  const videoUrl = await getInstagramMedia(url);
-  await downloadAndUpload(ctx, videoUrl);
+  const mediaUrls = await getInstagramMedia(url);
+
+  if (!mediaUrls || mediaUrls.length === 0) {
+    return ctx.reply("Tidak ada media yang ditemukan.");
+  }
+
+  // Mengunduh dan mengunggah setiap media
+  for (const mediaUrl of mediaUrls) {
+    await downloadAndUpload(ctx, mediaUrl);
+  }
 }
 
+// Fungsi handler platform lain (contoh: Facebook, Twitter, TikTok)
 async function handleFacebook(ctx, url) {
   const videoUrl = await getFacebookVideoUrl(url);
   await downloadAndUpload(ctx, videoUrl);
