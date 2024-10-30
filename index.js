@@ -102,7 +102,6 @@ async function getTiktokMedia(tiktokUrl) {
   }
 }
 
-// Fungsi untuk unduh dan unggah media dengan deteksi content-type
 // Fungsi untuk unduh dan unggah media dengan deteksi content-type dan progres
 async function downloadAndUpload(ctx, mediaUrl) {
   try {
@@ -115,14 +114,17 @@ async function downloadAndUpload(ctx, mediaUrl) {
     const contentType = response.headers['content-type'];
     const filePath = contentType.includes('video') ? './media.mp4' : './media.jpg';
     const totalLength = response.headers['content-length'];
-
     let downloadedLength = 0;
+
+    // Kirim pesan awal untuk progres download
+    const progressMessage = await ctx.reply("Download in progress...");
 
     const progressStream = new stream.Writable({
       write(chunk, encoding, callback) {
         downloadedLength += chunk.length;
         const progress = Math.round((downloadedLength / totalLength) * 100);
-        ctx.telegram.sendMessage(ctx.chat.id, `Download progress: ${progress}%`);
+        // Edit pesan dengan progres
+        ctx.telegram.editMessageText(ctx.chat.id, progressMessage.message_id, undefined, `Download progress: ${progress}% ${'⬇️'.repeat(Math.floor(progress / 10))}`);
         callback();
       }
     });
@@ -130,12 +132,14 @@ async function downloadAndUpload(ctx, mediaUrl) {
     // Mengunduh file dengan progres
     await pipeline(response.data, progressStream, fs.createWriteStream(filePath));
 
-    ctx.telegram.sendMessage(ctx.chat.id, 'Download selesai! Mulai mengupload...');
+    // Edit pesan setelah selesai download
+    await ctx.telegram.editMessageText(ctx.chat.id, progressMessage.message_id, undefined, 'Download selesai! Mulai mengupload...');
 
-    // Kirim media dan tampilkan progres upload
+    // Mengirim media dan tampilkan progres upload
     const uploadProgress = (current, total) => {
       const progress = Math.round((current / total) * 100);
-      ctx.telegram.sendMessage(ctx.chat.id, `Upload progress: ${progress}%`);
+      // Edit pesan dengan progres upload
+      ctx.telegram.editMessageText(ctx.chat.id, progressMessage.message_id, undefined, `Upload progress: ${progress}% ${'⬆️'.repeat(Math.floor(progress / 10))}`);
     };
 
     if (contentType.includes('video')) {
@@ -145,12 +149,13 @@ async function downloadAndUpload(ctx, mediaUrl) {
     }
 
     fs.unlinkSync(filePath); // Hapus file setelah diunggah
-    ctx.telegram.sendMessage(ctx.chat.id, 'Upload selesai!');
+    await ctx.telegram.editMessageText(ctx.chat.id, progressMessage.message_id, undefined, 'Upload selesai!');
   } catch (error) {
     console.error(error);
     ctx.reply("Gagal mengunggah media.");
   }
 }
+
 
 
 // Fungsi handler khusus Instagram untuk mengunduh dan mengunggah semua media
