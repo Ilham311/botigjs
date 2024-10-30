@@ -105,8 +105,6 @@ async function getTiktokMedia(tiktokUrl) {
 // Fungsi untuk unduh dan unggah media dengan deteksi content-type
 async function downloadAndUpload(ctx, mediaUrl) {
   try {
-    const initialMessage = await ctx.reply("Mengunduh media, harap tunggu...");
-
     const response = await axios({
       url: mediaUrl,
       method: 'GET',
@@ -116,19 +114,7 @@ async function downloadAndUpload(ctx, mediaUrl) {
     const contentType = response.headers['content-type'];
     const filePath = contentType.includes('video') ? './media.mp4' : './media.jpg';
 
-    const totalLength = response.headers['content-length'];
-    let downloadedLength = 0;
-
-    const writeStream = fs.createWriteStream(filePath);
-
-    // Update progress
-    response.data.on('data', (chunk) => {
-      downloadedLength += chunk.length;
-      const progress = Math.round((downloadedLength / totalLength) * 100);
-      ctx.editMessageText(`Mengunduh media: ${progress}%`);
-    });
-
-    await pipeline(response.data, writeStream);
+    await pipeline(response.data, fs.createWriteStream(filePath));
 
     if (contentType.includes('video')) {
       await ctx.replyWithVideo({ source: filePath });
@@ -137,7 +123,6 @@ async function downloadAndUpload(ctx, mediaUrl) {
     }
 
     fs.unlinkSync(filePath); // Hapus file setelah diunggah
-    await ctx.editMessageText("Media berhasil diunggah.");
   } catch (error) {
     console.error(error);
     ctx.reply("Gagal mengunggah media.");
@@ -161,20 +146,12 @@ async function handleInstagram(ctx, url) {
 // Fungsi handler platform lain (contoh: Facebook, Twitter, TikTok)
 async function handleFacebook(ctx, url) {
   const videoUrl = await getFacebookVideoUrl(url);
-  if (videoUrl) {
-    await downloadAndUpload(ctx, videoUrl);
-  } else {
-    ctx.reply("Tidak ada video yang ditemukan.");
-  }
+  await downloadAndUpload(ctx, videoUrl);
 }
 
 async function handleTwitter(ctx, url) {
   const videoUrl = await twitterApi(url);
-  if (videoUrl) {
-    await downloadAndUpload(ctx, videoUrl);
-  } else {
-    ctx.reply("Tidak ada video yang ditemukan.");
-  }
+  await downloadAndUpload(ctx, videoUrl);
 }
 
 async function handleTiktok(ctx, url) {
@@ -199,8 +176,9 @@ bot.command(['ig', 'fb', 'tw', 'tt'], async (ctx) => {
   if (!url) {
     return ctx.reply("URL tidak valid. Silakan coba lagi.");
   }
+  
+  await ctx.reply("⌛️ Tunggu sebentar.....");
 
-  await ctx.reply("Memulai proses unduh..."); // Pesan awal
 
   switch (command) {
     case '/ig':
