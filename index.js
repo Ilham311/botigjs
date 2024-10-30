@@ -103,6 +103,7 @@ async function getTiktokMedia(tiktokUrl) {
 }
 
 // Fungsi untuk unduh dan unggah media dengan deteksi content-type
+// Fungsi untuk unduh dan unggah media dengan deteksi content-type dan progres
 async function downloadAndUpload(ctx, mediaUrl) {
   try {
     const response = await axios({
@@ -113,21 +114,44 @@ async function downloadAndUpload(ctx, mediaUrl) {
 
     const contentType = response.headers['content-type'];
     const filePath = contentType.includes('video') ? './media.mp4' : './media.jpg';
+    const totalLength = response.headers['content-length'];
 
-    await pipeline(response.data, fs.createWriteStream(filePath));
+    let downloadedLength = 0;
+
+    const progressStream = new stream.Writable({
+      write(chunk, encoding, callback) {
+        downloadedLength += chunk.length;
+        const progress = Math.round((downloadedLength / totalLength) * 100);
+        ctx.telegram.sendMessage(ctx.chat.id, `Download progress: ${progress}%`);
+        callback();
+      }
+    });
+
+    // Mengunduh file dengan progres
+    await pipeline(response.data, progressStream, fs.createWriteStream(filePath));
+
+    ctx.telegram.sendMessage(ctx.chat.id, 'Download selesai! Mulai mengupload...');
+
+    // Kirim media dan tampilkan progres upload
+    const uploadProgress = (current, total) => {
+      const progress = Math.round((current / total) * 100);
+      ctx.telegram.sendMessage(ctx.chat.id, `Upload progress: ${progress}%`);
+    };
 
     if (contentType.includes('video')) {
-      await ctx.replyWithVideo({ source: filePath });
+      await ctx.replyWithVideo({ source: filePath, caption: 'Mengunggah video...', progress_callback: uploadProgress });
     } else if (contentType.includes('image')) {
-      await ctx.replyWithPhoto({ source: filePath });
+      await ctx.replyWithPhoto({ source: filePath, caption: 'Mengunggah gambar...', progress_callback: uploadProgress });
     }
 
     fs.unlinkSync(filePath); // Hapus file setelah diunggah
+    ctx.telegram.sendMessage(ctx.chat.id, 'Upload selesai!');
   } catch (error) {
     console.error(error);
     ctx.reply("Gagal mengunggah media.");
   }
 }
+
 
 // Fungsi handler khusus Instagram untuk mengunduh dan mengunggah semua media
 async function handleInstagram(ctx, url) {
