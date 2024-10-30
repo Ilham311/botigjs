@@ -102,9 +102,11 @@ async function getTiktokMedia(tiktokUrl) {
   }
 }
 
-// Fungsi untuk unduh dan unggah media dengan deteksi content-type dan progres
+// Fungsi untuk unduh dan unggah media dengan deteksi content-type
 async function downloadAndUpload(ctx, mediaUrl) {
   try {
+    const initialMessage = await ctx.reply("Mengunduh media, harap tunggu...");
+
     const response = await axios({
       url: mediaUrl,
       method: 'GET',
@@ -113,50 +115,34 @@ async function downloadAndUpload(ctx, mediaUrl) {
 
     const contentType = response.headers['content-type'];
     const filePath = contentType.includes('video') ? './media.mp4' : './media.jpg';
+
     const totalLength = response.headers['content-length'];
     let downloadedLength = 0;
 
-    // Kirim pesan awal untuk progres download
-    const progressMessage = await ctx.reply("Download in progress...");
+    const writeStream = fs.createWriteStream(filePath);
 
-    const progressStream = new stream.Writable({
-      write(chunk, encoding, callback) {
-        downloadedLength += chunk.length;
-        const progress = Math.round((downloadedLength / totalLength) * 100);
-        // Edit pesan dengan progres
-        ctx.telegram.editMessageText(ctx.chat.id, progressMessage.message_id, undefined, `Download progress: ${progress}% ${'⬇️'.repeat(Math.floor(progress / 10))}`);
-        callback();
-      }
+    // Update progress
+    response.data.on('data', (chunk) => {
+      downloadedLength += chunk.length;
+      const progress = Math.round((downloadedLength / totalLength) * 100);
+      ctx.editMessageText(`Mengunduh media: ${progress}%`);
     });
 
-    // Mengunduh file dengan progres
-    await pipeline(response.data, progressStream, fs.createWriteStream(filePath));
-
-    // Edit pesan setelah selesai download
-    await ctx.telegram.editMessageText(ctx.chat.id, progressMessage.message_id, undefined, 'Download selesai! Mulai mengupload...');
-
-    // Mengirim media dan tampilkan progres upload
-    const uploadProgress = (current, total) => {
-      const progress = Math.round((current / total) * 100);
-      // Edit pesan dengan progres upload
-      ctx.telegram.editMessageText(ctx.chat.id, progressMessage.message_id, undefined, `Upload progress: ${progress}% ${'⬆️'.repeat(Math.floor(progress / 10))}`);
-    };
+    await pipeline(response.data, writeStream);
 
     if (contentType.includes('video')) {
-      await ctx.replyWithVideo({ source: filePath, caption: 'Mengunggah video...', progress_callback: uploadProgress });
+      await ctx.replyWithVideo({ source: filePath });
     } else if (contentType.includes('image')) {
-      await ctx.replyWithPhoto({ source: filePath, caption: 'Mengunggah gambar...', progress_callback: uploadProgress });
+      await ctx.replyWithPhoto({ source: filePath });
     }
 
     fs.unlinkSync(filePath); // Hapus file setelah diunggah
-    await ctx.telegram.editMessageText(ctx.chat.id, progressMessage.message_id, undefined, 'Upload selesai!');
+    await ctx.editMessageText("Media berhasil diunggah.");
   } catch (error) {
     console.error(error);
     ctx.reply("Gagal mengunggah media.");
   }
 }
-
-
 
 // Fungsi handler khusus Instagram untuk mengunduh dan mengunggah semua media
 async function handleInstagram(ctx, url) {
@@ -175,12 +161,20 @@ async function handleInstagram(ctx, url) {
 // Fungsi handler platform lain (contoh: Facebook, Twitter, TikTok)
 async function handleFacebook(ctx, url) {
   const videoUrl = await getFacebookVideoUrl(url);
-  await downloadAndUpload(ctx, videoUrl);
+  if (videoUrl) {
+    await downloadAndUpload(ctx, videoUrl);
+  } else {
+    ctx.reply("Tidak ada video yang ditemukan.");
+  }
 }
 
 async function handleTwitter(ctx, url) {
   const videoUrl = await twitterApi(url);
-  await downloadAndUpload(ctx, videoUrl);
+  if (videoUrl) {
+    await downloadAndUpload(ctx, videoUrl);
+  } else {
+    ctx.reply("Tidak ada video yang ditemukan.");
+  }
 }
 
 async function handleTiktok(ctx, url) {
@@ -205,6 +199,8 @@ bot.command(['ig', 'fb', 'tw', 'tt'], async (ctx) => {
   if (!url) {
     return ctx.reply("URL tidak valid. Silakan coba lagi.");
   }
+
+  await ctx.reply("Memulai proses unduh..."); // Pesan awal
 
   switch (command) {
     case '/ig':
