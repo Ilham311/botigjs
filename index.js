@@ -9,22 +9,14 @@ const BOT_TOKEN = process.env.BOT_TOKEN || "7375007973:AAFczxhpL2dZSC6kz0EBKKRRK
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-const CONTENT_TYPE_MAP = {
-    "video/mp4": "mp4",
-    "image/jpeg": "jpg",
-    "image/png": "png",
-    "image/gif": "gif",
-    "image/webp": "webp",
-};
-
-const PORT = process.env.PORT || 3000;
-
+// Cek server di route utama /
 app.get('/', (req, res) => {
-    res.send('Server berjalan di Back4App!');
+    res.json({ status: "Server is running", message: "Bot Telegram is active!" });
 });
 
-app.listen(PORT, () => {
-    console.log(`Server berjalan di port ${PORT}`);
+// Jalankan server di port 3000
+app.listen(3000, () => {
+    console.log('Server running on http://localhost:3000');
 });
 
 // Fungsi download media
@@ -40,8 +32,7 @@ async function downloadAndUpload(ctx, mediaUrls, caption = "") {
                 responseType: 'stream'
             });
 
-            const contentType = response.headers['content-type'] || "";
-            const fileExt = CONTENT_TYPE_MAP[contentType] || "mp4";
+            const fileExt = response.headers['content-type'].split('/')[1] || "mp4";
             const filePath = path.join(__dirname, `media_${i}.${fileExt}`);
 
             const writer = fs.createWriteStream(filePath);
@@ -52,31 +43,25 @@ async function downloadAndUpload(ctx, mediaUrls, caption = "") {
                 writer.on('error', reject);
             });
 
-            mediaFiles.push({ path: filePath, type: contentType });
-
+            mediaFiles.push(filePath);
         } catch (error) {
             console.error("Download error:", error);
         }
     }
 
     if (mediaFiles.length === 1) {
-        const file = mediaFiles[0];
-        if (file.type.startsWith("video")) {
-            await ctx.replyWithVideo({ source: file.path }, { caption });
-        } else {
-            await ctx.replyWithPhoto({ source: file.path }, { caption });
-        }
+        await ctx.replyWithVideo({ source: mediaFiles[0] }, { caption });
     } else {
         let mediaGroup = mediaFiles.map((file, index) => ({
-            type: file.type.startsWith("video") ? "video" : "photo",
-            media: { source: file.path },
+            type: "video",
+            media: { source: file },
             caption: index === 0 ? caption : ""
         }));
 
         await ctx.replyWithMediaGroup(mediaGroup);
     }
 
-    mediaFiles.forEach(file => fs.unlinkSync(file.path));
+    mediaFiles.forEach(file => fs.unlinkSync(file));
 }
 
 // Handler Command
@@ -84,22 +69,15 @@ bot.command(['ig', 'fb', 'tw', 'tt'], async (ctx) => {
     const messageText = ctx.message.text;
     const [command, url] = messageText.split(" ");
 
-    if (!url) {
-        return ctx.reply("⚠️ URL tidak valid. Silakan coba lagi.");
-    }
+    if (!url) return ctx.reply("⚠️ URL tidak valid. Silakan coba lagi.");
 
     const msg = await ctx.reply("⌛ Tunggu sebentar...");
 
     let mediaData;
-    if (command === "/ig") {
-        mediaData = await getInstagramMedia(url);
-    } else if (command === "/fb") {
-        mediaData = await getFacebookVideoUrl(url);
-    } else if (command === "/tw") {
-        mediaData = await getTwitterMedia(url);
-    } else if (command === "/tt") {
-        mediaData = await getTikTokMedia(url);
-    }
+    if (command === "/ig") mediaData = await getInstagramMedia(url);
+    else if (command === "/fb") mediaData = await getFacebookVideoUrl(url);
+    else if (command === "/tw") mediaData = await getTwitterMedia(url);
+    else if (command === "/tt") mediaData = await getTikTokMedia(url);
 
     if (mediaData && mediaData.urls.length > 0) {
         await downloadAndUpload(ctx, mediaData.urls, mediaData.caption || "");
@@ -188,7 +166,3 @@ async function getTikTokMedia(tiktokUrl) {
 
 // Jalankan bot
 bot.launch().then(() => console.log("Bot Telegram berjalan..."));
-
-// Tangani exit agar bot berhenti dengan bersih
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
