@@ -104,7 +104,7 @@ bot.command(['ig', 'fb', 'tw', 'tt'], async (ctx) => {
 
         if (mediaData && mediaData.urls.length > 0) {
             await downloadAndUpload(ctx, mediaData.urls, mediaData.caption || "");
-            await msg.delete();
+            await ctx.deleteMessage(msg.message_id).catch(console.error);
         } else {
             await msg.editText("❌ Tidak ada media yang ditemukan.");
         }
