@@ -17,13 +17,14 @@ const CONTENT_TYPE_MAP = {
     "image/webp": "webp",
 };
 
-// Fake website dengan redirect
+const PORT = process.env.PORT || 3000;
+
 app.get('/', (req, res) => {
-    res.send('<h1>Fake Website</h1><script>setTimeout(() => { window.location.href = "https://google.com"; }, 2000);</script>');
+    res.send('Server berjalan di Back4App!');
 });
 
-app.listen(3000, () => {
-    console.log('Fake website running on http://localhost:3000');
+app.listen(PORT, () => {
+    console.log(`Server berjalan di port ${PORT}`);
 });
 
 // Fungsi download media
