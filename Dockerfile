@@ -9,6 +9,7 @@ COPY package*.json ./
 
 # Install dependencies aplikasi
 RUN npm install
+RUN npm install dotenv
 
 # Salin semua file dari direktori lokal ke dalam direktori kerja di container
 COPY . .
