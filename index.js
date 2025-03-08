@@ -179,29 +179,35 @@ async function getTwitterMedia(twitterUrl) {
 // TikTok API
 async function getTikTokMedia(tiktokUrl) {
     try {
-        const response = await axios.get(`https://www.tikwm.com/api/?url=${tiktokUrl}`);
+        if (!tiktokUrl) throw new Error("URL TikTok tidak boleh kosong.");
+
+        const apiUrl = `https://www.tikwm.com/api/?url=${tiktokUrl}`;
+        const response = await axios.get(apiUrl);
 
         if (response.status === 200 && response.data.data) {
             const data = response.data.data;
 
-            if (data.duration && data.play) {
-                // Jika memiliki durasi dan play URL, itu adalah video
+            // Cek apakah ada video (play URL) yang bukan MP3
+            if (data.play && !data.play.endsWith(".mp3")) {
                 return {
                     urls: [data.play],
                     caption: data.title || "Tidak ada caption."
                 };
-            } else if (data.images) {
-                // Jika memiliki images, itu adalah gambar
+            }
+
+            // Jika tidak ada video, cek apakah ada gambar
+            if (Array.isArray(data.images) && data.images.length > 0) {
                 return {
-                    urls: data.images, // Berisi daftar URL gambar
+                    urls: data.images,
                     caption: data.title || "Tidak ada caption."
                 };
             }
         }
     } catch (error) {
-        console.error("❌ TikTok Error:", error);
+        console.error("❌ TikTok Error:", error.message);
     }
-    return { urls: [] };
+
+    return { urls: [] }; // Kembalikan kosong jika hanya ada mp3 atau error
 }
 
 
