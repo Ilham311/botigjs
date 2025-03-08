@@ -33,7 +33,6 @@ async function healthCheck() {
 }
 setInterval(healthCheck, CHECK_INTERVAL);
 
-// Fungsi download dan upload media
 async function downloadAndUpload(ctx, mediaUrls, caption = "") {
     caption = caption.substring(0, 1024);
     let mediaFiles = [];
@@ -46,7 +45,15 @@ async function downloadAndUpload(ctx, mediaUrls, caption = "") {
                 responseType: 'stream'
             });
 
-            const fileExt = response.headers['content-type'].split('/')[1] || "mp4";
+            const contentType = response.headers['content-type'];
+            let fileExt = "mp4"; // Default ke video jika tidak ditemukan jenis file
+
+            if (contentType.includes("image")) {
+                fileExt = "jpg";
+            } else if (contentType.includes("video")) {
+                fileExt = "mp4";
+            }
+
             const filePath = path.join(__dirname, `media_${i}.${fileExt}`);
 
             const writer = fs.createWriteStream(filePath);
@@ -57,7 +64,8 @@ async function downloadAndUpload(ctx, mediaUrls, caption = "") {
                 writer.on('error', reject);
             });
 
-            mediaFiles.push(filePath);
+            mediaFiles.push({ filePath, type: contentType.includes("image") ? "photo" : "video" });
+
         } catch (error) {
             console.error("❌ Download error:", error);
         }
@@ -65,11 +73,15 @@ async function downloadAndUpload(ctx, mediaUrls, caption = "") {
 
     try {
         if (mediaFiles.length === 1) {
-            await ctx.replyWithVideo({ source: mediaFiles[0] }, { caption });
+            if (mediaFiles[0].type === "photo") {
+                await ctx.replyWithPhoto({ source: mediaFiles[0].filePath }, { caption });
+            } else {
+                await ctx.replyWithVideo({ source: mediaFiles[0].filePath }, { caption });
+            }
         } else {
             let mediaGroup = mediaFiles.map((file, index) => ({
-                type: "video",
-                media: { source: file },
+                type: file.type,
+                media: { source: file.filePath },
                 caption: index === 0 ? caption : ""
             }));
             await ctx.replyWithMediaGroup(mediaGroup);
@@ -79,8 +91,10 @@ async function downloadAndUpload(ctx, mediaUrls, caption = "") {
         await ctx.reply("⚠️ Gagal mengupload media.");
     }
 
-    mediaFiles.forEach(file => fs.unlinkSync(file));
+    // Hapus file setelah dikirim
+    mediaFiles.forEach(file => fs.unlinkSync(file.filePath));
 }
+
 
 // Handler Command
 bot.command(['ig', 'fb', 'tw', 'tt'], async (ctx) => {
