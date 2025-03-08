@@ -180,17 +180,30 @@ async function getTwitterMedia(twitterUrl) {
 async function getTikTokMedia(tiktokUrl) {
     try {
         const response = await axios.get(`https://www.tikwm.com/api/?url=${tiktokUrl}`);
+
         if (response.status === 200 && response.data.data) {
-            return {
-                urls: [response.data.data.play],
-                caption: response.data.data.title || "Tidak ada caption."
-            };
+            const data = response.data.data;
+
+            if (data.duration && data.play) {
+                // Jika memiliki durasi dan play URL, itu adalah video
+                return {
+                    urls: [data.play],
+                    caption: data.title || "Tidak ada caption."
+                };
+            } else if (data.images) {
+                // Jika memiliki images, itu adalah gambar
+                return {
+                    urls: data.images, // Berisi daftar URL gambar
+                    caption: data.title || "Tidak ada caption."
+                };
+            }
         }
     } catch (error) {
         console.error("❌ TikTok Error:", error);
     }
     return { urls: [] };
 }
+
 
 // Jalankan bot
 bot.launch().then(() => console.log("🤖 Bot Telegram berjalan..."));
