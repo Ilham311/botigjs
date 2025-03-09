@@ -4,38 +4,23 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
-const crypto = require('crypto');
 
 const BOT_TOKEN = process.env.BOT_TOKEN || "7375007973:AAFczxhpL2dZSC6kz0EBKKRRKqMvoNZklyg";
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-const CHECK_INTERVAL = 100000; // 300 detik (5 menit)
-const CHECK_URL = "https://bot2-9kk1x0u5.b4a.run/";
+app.get('/', (req, res) => res.json({ status: "Server is running", message: "Bot Telegram is active!" }));
+app.listen(3000, () => console.log('✅ Server running on http://localhost:3000'));
 
-const DEFAULT_EPOCH = "1739818135710";
-const DEFAULT_HASH = "601c84a1991b93fa50a8ebd1c6a5d5f797eac864060f7cf82f61fcf61dbaad71";
-
-// Server express untuk health check
-app.get('/', (req, res) => {
-    res.json({ status: "Server is running", message: "Bot Telegram is active!" });
-});
-
-// Jalankan server di port 3000
-app.listen(3000, () => {
-    console.log('✅ Server running on http://localhost:3000');
-});
-
-// HTTP Health Check setiap 5 menit
 async function healthCheck() {
     try {
-        const response = await axios.get(CHECK_URL, { timeout: 5000 });
+        const response = await axios.get("https://bot2-9kk1x0u5.b4a.run/", { timeout: 5000 });
         console.log(`✅ Health check success: ${response.status}`);
     } catch (error) {
         console.error("❌ Health check failed:", error.message);
     }
 }
-setInterval(healthCheck, CHECK_INTERVAL);
+setInterval(healthCheck, 100000);
 
 async function downloadAndUpload(ctx, mediaUrls, caption = "") {
     caption = caption.substring(0, 1024);
@@ -43,43 +28,10 @@ async function downloadAndUpload(ctx, mediaUrls, caption = "") {
 
     for (let i = 0; i < mediaUrls.length; i++) {
         try {
-            const urlObject = new URL(mediaUrls[i]);
-            const authority = urlObject.hostname; // Ambil domain dari URL
-
-            const response = await axios({
-                url: mediaUrls[i],
-                method: 'GET',
-                responseType: 'stream',
-                headers: {
-                    'authority': authority,
-                    'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-                    'accept-language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
-                    'cache-control': 'max-age=0',
-                    'if-modified-since': 'Thu, 17 Oct 2024 12:36:36 GMT',
-                    'sec-ch-ua': '"Not A(Brand";v="8", "Chromium";v="132"',
-                    'sec-ch-ua-mobile': '?1',
-                    'sec-ch-ua-platform': '"Android"',
-                    'sec-fetch-dest': 'document',
-                    'sec-fetch-mode': 'navigate',
-                    'sec-fetch-site': 'cross-site',
-                    'sec-fetch-user': '?1',
-                    'upgrade-insecure-requests': '1',
-                    'user-agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Mobile Safari/537.36',
-                    'x-client-data': 'CL6AywEIxZrNAQ=='
-                }
-            });
-
+            const response = await axios({ url: mediaUrls[i], method: 'GET', responseType: 'stream' });
             const contentType = response.headers['content-type'];
-            let fileExt = "mp4"; // Default ke video jika tidak ditemukan jenis file
-
-            if (contentType.includes("image")) {
-                fileExt = "jpg";
-            } else if (contentType.includes("video")) {
-                fileExt = "mp4";
-            }
-
+            let fileExt = contentType.includes("image") ? "jpg" : "mp4";
             const filePath = path.join(__dirname, `media_${i}.${fileExt}`);
-
             const writer = fs.createWriteStream(filePath);
             response.data.pipe(writer);
 
@@ -89,9 +41,8 @@ async function downloadAndUpload(ctx, mediaUrls, caption = "") {
             });
 
             mediaFiles.push({ filePath, type: contentType.includes("image") ? "photo" : "video" });
-
         } catch (error) {
-            console.error(`❌ Download error dari ${mediaUrls[i]}:`, error.message);
+            console.error("❌ Download error:", error);
         }
     }
 
@@ -115,38 +66,26 @@ async function downloadAndUpload(ctx, mediaUrls, caption = "") {
         await ctx.reply("⚠️ Gagal mengupload media.");
     }
 
-    // Hapus file setelah dikirim
     mediaFiles.forEach(file => fs.unlinkSync(file.filePath));
 }
 
-
-// Handler Command
-bot.command(['ig', 'fb', 'tw', 'tt', 'yt'], async (ctx) => {
+bot.command(['ig', 'fb', 'tw', 'tt'], async (ctx) => {
     try {
-        const messageText = ctx.message.text;
-        const [command, url] = messageText.split(" ");
-
+        const [command, url] = ctx.message.text.split(" ");
         if (!url) return ctx.reply("⚠️ URL tidak valid. Silakan coba lagi.");
-
-        let msg;
-        try {
-            msg = await ctx.reply("⌛ Tunggu sebentar...");
-        } catch (err) {
-            console.error("❌ Error saat mengirim pesan status:", err);
-        }
+        let msg = await ctx.reply("⌛ Tunggu sebentar...");
 
         let mediaData;
         if (command === "/ig") mediaData = await getInstagramMedia(url);
         else if (command === "/fb") mediaData = await getFacebookVideoUrl(url);
         else if (command === "/tw") mediaData = await getTwitterMedia(url);
         else if (command === "/tt") mediaData = await getTikTokMedia(url);
-        else if (command === "/yt") mediaData = await YTdown(url);
 
         if (mediaData && mediaData.urls.length > 0) {
             await downloadAndUpload(ctx, mediaData.urls, mediaData.caption || "");
-            if (msg) await ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id);
+            await ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id);
         } else {
-            if (msg) await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, "❌ Tidak ada media yang ditemukan.");
+            await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, "❌ Tidak ada media yang ditemukan.");
         }
     } catch (error) {
         console.error("❌ Command Error:", error);
@@ -166,47 +105,18 @@ async function getInstagramMedia(instagramUrl) {
         });
 
         if (response.status === 200) {
-            try {
-                const data = response.data.data || {};
+            const data = response.data.data || {};
+            let mediaUrls = [];
 
-                let videos = [];
-                let images = [];
-                let caption = data.title || "Tidak ada caption.";
-
-                // Coba ambil video utama langsung dari data jika ada
-                if (data.video_url) {
-                    videos.push(data.video_url);
-                }
-
-                // Jika video utama tidak ditemukan, cari dalam GraphVideo
-                if (!videos.length && data.__type === "GraphVideo" && data.video_url) {
-                    videos.push(data.video_url);
-                }
-
-                // Jika masih belum ada video, cari dalam GraphSidecar
-                if (!videos.length && data.__type === "GraphSidecar") {
-                    (data.items || []).forEach(item => {
-                        if (item.__type === "GraphVideo" && item.video_url) {
-                            videos.push(item.video_url);
-                        } else if (item.display_url) {
-                            images.push(item.display_url);
-                        }
-                    });
-                }
-
-                // Jika hanya gambar utama
-                if (!videos.length && data.display_url) {
-                    images.push(data.display_url);
-                }
-
-                // Prioritaskan video jika ada
-                let mediaUrls = [...videos, ...images];
-
-                return { urls: mediaUrls, caption };
-
-            } catch (error) {
-                console.error("❌ Parsing Error:", error);
+            if (data.video_url) mediaUrls.push(data.video_url);
+            if (!mediaUrls.length && data.__type === "GraphSidecar") {
+                (data.items || []).forEach(item => {
+                    if (item.__type === "GraphVideo" && item.video_url) mediaUrls.push(item.video_url);
+                    else if (item.display_url) mediaUrls.push(item.display_url);
+                });
             }
+            if (!mediaUrls.length && data.display_url) mediaUrls.push(data.display_url);
+            return { urls: mediaUrls, caption: data.title || "Tidak ada caption." };
         }
     } catch (error) {
         console.error("❌ Instagram Error:", error);
@@ -214,8 +124,6 @@ async function getInstagramMedia(instagramUrl) {
     return { urls: [] };
 }
 
-
-// Facebook API
 async function getFacebookVideoUrl(fbUrl) {
     try {
         const response = await axios.get(`https://vdfr.aculix.net/fb?url=${fbUrl}`, {
@@ -232,7 +140,6 @@ async function getFacebookVideoUrl(fbUrl) {
     return { urls: [] };
 }
 
-// Twitter API
 async function getTwitterMedia(twitterUrl) {
     try {
         const response = await axios.get("https://twitter-downloader-download-twitter-videos-gifs-and-images.p.rapidapi.com/status", {
@@ -252,76 +159,22 @@ async function getTwitterMedia(twitterUrl) {
     return { urls: [] };
 }
 
-// TikTok API
 async function getTikTokMedia(tiktokUrl) {
     try {
-        if (!tiktokUrl) throw new Error("URL TikTok tidak boleh kosong.");
-
-        const apiUrl = `https://www.tikwm.com/api/?url=${tiktokUrl}`;
-        const response = await axios.get(apiUrl);
-
+        const response = await axios.get(`https://www.tikwm.com/api/?url=${tiktokUrl}`);
         if (response.status === 200 && response.data.data) {
             const data = response.data.data;
-
-            // Cek apakah ada video (play URL) yang bukan MP3
             if (data.play && !data.play.endsWith(".mp3")) {
-                return {
-                    urls: [data.play],
-                    caption: data.title || "Tidak ada caption."
-                };
+                return { urls: [data.play], caption: data.title || "Tidak ada caption." };
             }
-
-            // Jika tidak ada video, cek apakah ada gambar
             if (Array.isArray(data.images) && data.images.length > 0) {
-                return {
-                    urls: data.images,
-                    caption: data.title || "Tidak ada caption."
-                };
+                return { urls: data.images, caption: data.title || "Tidak ada caption." };
             }
         }
     } catch (error) {
         console.error("❌ TikTok Error:", error.message);
     }
-
-    return { urls: [] }; // Kembalikan kosong jika hanya ada mp3 atau error
-}
-async function YTdown(videoUrl) {
-    try {
-        const timestamp = Date.now();
-        const signData = `${videoUrl}${timestamp}${DEFAULT_HASH}`;
-        const hash = crypto.createHash('sha256').update(signData).digest('hex');
-
-        const requestBody = {
-            ts: timestamp,
-            _ts: DEFAULT_EPOCH,
-            _tsc: 0,
-            _s: hash,
-            url: videoUrl
-        };
-
-        const response = await axios.post("https://ummy.net/api/convert", requestBody, {
-            headers: { "Content-Type": "application/json" }
-        });
-
-        const videos = response.data?.url || [];
-        const googleVideos = videos.filter(v =>
-            ["MP4", "WEBM"].includes(v.name) &&
-            v.url.includes("googlevideo.com") &&
-            !v.audio &&
-            !v.no_audio
-        );
-
-        if (googleVideos.length > 0) {
-            const bestVideo = googleVideos.reduce((max, v) => parseInt(v.quality) > parseInt(max.quality) ? v : max, googleVideos[0]);
-            return { urls: [bestVideo.url] };
-        }
-
-    } catch (error) {
-        console.error("❌ YouTube Download Error:", error.message);
-    }
     return { urls: [] };
 }
 
-
-// Jalankan bot
 bot.launch().then(() => console.log("🤖 Bot Telegram berjalan..."));
