@@ -43,14 +43,29 @@ async function downloadAndUpload(ctx, mediaUrls, caption = "") {
 
     for (let i = 0; i < mediaUrls.length; i++) {
         try {
+            const urlObject = new URL(mediaUrls[i]);
+            const authority = urlObject.hostname; // Ambil domain dari URL
+
             const response = await axios({
                 url: mediaUrls[i],
                 method: 'GET',
                 responseType: 'stream',
                 headers: {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, seperti Gecko) Chrome/91.0.4472.124 Safari/537.36",
-                    "Referer": "https://www.google.com/",
-                    "Accept": "*/*"
+                    'authority': authority,
+                    'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                    'accept-language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+                    'cache-control': 'max-age=0',
+                    'if-modified-since': 'Thu, 17 Oct 2024 12:36:36 GMT',
+                    'sec-ch-ua': '"Not A(Brand";v="8", "Chromium";v="132"',
+                    'sec-ch-ua-mobile': '?1',
+                    'sec-ch-ua-platform': '"Android"',
+                    'sec-fetch-dest': 'document',
+                    'sec-fetch-mode': 'navigate',
+                    'sec-fetch-site': 'cross-site',
+                    'sec-fetch-user': '?1',
+                    'upgrade-insecure-requests': '1',
+                    'user-agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Mobile Safari/537.36',
+                    'x-client-data': 'CL6AywEIxZrNAQ=='
                 }
             });
 
@@ -76,7 +91,7 @@ async function downloadAndUpload(ctx, mediaUrls, caption = "") {
             mediaFiles.push({ filePath, type: contentType.includes("image") ? "photo" : "video" });
 
         } catch (error) {
-            console.error("❌ Download error:", error);
+            console.error(`❌ Download error dari ${mediaUrls[i]}:`, error.message);
         }
     }
 
@@ -103,7 +118,6 @@ async function downloadAndUpload(ctx, mediaUrls, caption = "") {
     // Hapus file setelah dikirim
     mediaFiles.forEach(file => fs.unlinkSync(file.filePath));
 }
-
 
 
 // Handler Command
