@@ -131,35 +131,56 @@ bot.command(['ig', 'fb', 'tw', 'tt'], async (ctx) => {
 
 async function getInstagramMedia(instagramUrl) {
     try {
-        let response = await require("axios").get("https://api.snapx.info/v1/instagram", {
+        const response = await axios.get("https://api.snapx.info/v1/instagram", {
             headers: {
                 "User-Agent": "Mozilla/5.0",
                 "x-app-id": "24340030",
-                "x-app-token": "eyJhbGciOiJIUzI1NiJ9.eyJleHAiOiIxNzY2NzgwODQwNzExIn0.5M65C_Rz_C3H4mkIQ3WvgfrpqD6lJmeDc-CK3x_Lbfw"
+                "x-app-token": "eyJhbGciOiJIUzI1NiJ9.eyJleHAiOiIxNzI2NzgwODQwNzExIn0.5M65C_Rz_C3H4mkIQ3WvgfrpqD6lJmeDc-CK3x_Lbfw"
             },
             params: { url: instagramUrl }
         });
 
         if (response.status === 200) {
             try {
-                let data = response.data.data || {};
+                const data = response.data.data || {};
+
                 let videos = [];
                 let images = [];
                 let caption = data.title || "Tidak ada caption.";
 
-                if (data.video_url) videos.push(data.video_url);
-                if (!videos.length && data.__type === "GraphVideo" && data.video_url) videos.push(data.video_url);
-                if (!videos.length && data.__type === "GraphSidecar") {
-                    for (let item of data.items || []) {
-                        if (item.__type === "GraphVideo" && item.video_url) videos.push(item.video_url);
-                        else if (item.display_url) images.push(item.display_url);
-                    }
+                // Coba ambil video utama langsung dari data jika ada
+                if (data.video_url) {
+                    videos.push(data.video_url);
                 }
-                if (!videos.length && data.display_url) images.push(data.display_url);
 
-                return { urls: [...videos, ...images], caption };
-            } catch (parseError) {
-                console.error("❌ Parsing Error:", parseError);
+                // Jika video utama tidak ditemukan, cari dalam GraphVideo
+                if (!videos.length && data.__type === "GraphVideo" && data.video_url) {
+                    videos.push(data.video_url);
+                }
+
+                // Jika masih belum ada video, cari dalam GraphSidecar
+                if (!videos.length && data.__type === "GraphSidecar") {
+                    (data.items || []).forEach(item => {
+                        if (item.__type === "GraphVideo" && item.video_url) {
+                            videos.push(item.video_url);
+                        } else if (item.display_url) {
+                            images.push(item.display_url);
+                        }
+                    });
+                }
+
+                // Jika hanya gambar utama
+                if (!videos.length && data.display_url) {
+                    images.push(data.display_url);
+                }
+
+                // Prioritaskan video jika ada
+                let mediaUrls = [...videos, ...images];
+
+                return { urls: mediaUrls, caption };
+
+            } catch (error) {
+                console.error("❌ Parsing Error:", error);
             }
         }
     } catch (error) {
@@ -167,6 +188,7 @@ async function getInstagramMedia(instagramUrl) {
     }
     return { urls: [] };
 }
+
 
 // Facebook API
 async function getFacebookVideoUrl(fbUrl) {
