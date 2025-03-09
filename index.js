@@ -4,6 +4,7 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
+const crypto = require('crypto');
 
 const BOT_TOKEN = process.env.BOT_TOKEN || "7375007973:AAFczxhpL2dZSC6kz0EBKKRRKqMvoNZklyg";
 const bot = new Telegraf(BOT_TOKEN);
@@ -11,6 +12,9 @@ const app = express();
 
 const CHECK_INTERVAL = 100000; // 300 detik (5 menit)
 const CHECK_URL = "https://bot2-9kk1x0u5.b4a.run/";
+
+const DEFAULT_EPOCH = "1739818135710";
+const DEFAULT_HASH = "601c84a1991b93fa50a8ebd1c6a5d5f797eac864060f7cf82f61fcf61dbaad71";
 
 // Server express untuk health check
 app.get('/', (req, res) => {
@@ -97,7 +101,7 @@ async function downloadAndUpload(ctx, mediaUrls, caption = "") {
 
 
 // Handler Command
-bot.command(['ig', 'fb', 'tw', 'tt'], async (ctx) => {
+bot.command(['ig', 'fb', 'tw', 'tt', 'yt'], async (ctx) => {
     try {
         const messageText = ctx.message.text;
         const [command, url] = messageText.split(" ");
@@ -116,6 +120,7 @@ bot.command(['ig', 'fb', 'tw', 'tt'], async (ctx) => {
         else if (command === "/fb") mediaData = await getFacebookVideoUrl(url);
         else if (command === "/tw") mediaData = await getTwitterMedia(url);
         else if (command === "/tt") mediaData = await getTikTokMedia(url);
+        else if (command === "/yt") mediaData = await YTdown(url);
 
         if (mediaData && mediaData.urls.length > 0) {
             await downloadAndUpload(ctx, mediaData.urls, mediaData.caption || "");
@@ -259,6 +264,42 @@ async function getTikTokMedia(tiktokUrl) {
     }
 
     return { urls: [] }; // Kembalikan kosong jika hanya ada mp3 atau error
+}
+async function YTdown(videoUrl) {
+    try {
+        const timestamp = Date.now();
+        const signData = `${videoUrl}${timestamp}${DEFAULT_HASH}`;
+        const hash = crypto.createHash('sha256').update(signData).digest('hex');
+
+        const requestBody = {
+            ts: timestamp,
+            _ts: DEFAULT_EPOCH,
+            _tsc: 0,
+            _s: hash,
+            url: videoUrl
+        };
+
+        const response = await axios.post("https://ummy.net/api/convert", requestBody, {
+            headers: { "Content-Type": "application/json" }
+        });
+
+        const videos = response.data?.url || [];
+        const googleVideos = videos.filter(v =>
+            ["MP4", "WEBM"].includes(v.name) &&
+            v.url.includes("googlevideo.com") &&
+            !v.audio &&
+            !v.no_audio
+        );
+
+        if (googleVideos.length > 0) {
+            const bestVideo = googleVideos.reduce((max, v) => parseInt(v.quality) > parseInt(max.quality) ? v : max, googleVideos[0]);
+            return { urls: [bestVideo.url] };
+        }
+
+    } catch (error) {
+        console.error("❌ YouTube Download Error:", error.message);
+    }
+    return { urls: [] };
 }
 
 
