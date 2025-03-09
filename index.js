@@ -129,23 +129,38 @@ bot.command(['ig', 'fb', 'tw', 'tt'], async (ctx) => {
     }
 });
 
-// Instagram API
 async function getInstagramMedia(instagramUrl) {
     try {
-        const response = await axios.get("https://api.snapx.info/v1/instagram", {
+        let response = await require("axios").get("https://api.snapx.info/v1/instagram", {
             headers: {
                 "User-Agent": "Mozilla/5.0",
                 "x-app-id": "24340030",
-                "x-app-token": "eyJhbGciOiJIUzI1NiJ9.eyJleHAiOiIxNzI2NzgwODQwNzExIn0.5M65C_Rz_C3H4mkIQ3WvgfrpqD6lJmeDc-CK3x_Lbfw"
+                "x-app-token": "eyJhbGciOiJIUzI1NiJ9.eyJleHAiOiIxNzY2NzgwODQwNzExIn0.5M65C_Rz_C3H4mkIQ3WvgfrpqD6lJmeDc-CK3x_Lbfw"
             },
             params: { url: instagramUrl }
         });
 
-        if (response.status === 200 && response.data.data) {
-            return {
-                urls: [response.data.data.video_url || response.data.data.display_url],
-                caption: response.data.data.title || "Tidak ada caption."
-            };
+        if (response.status === 200) {
+            try {
+                let data = response.data.data || {};
+                let videos = [];
+                let images = [];
+                let caption = data.title || "Tidak ada caption.";
+
+                if (data.video_url) videos.push(data.video_url);
+                if (!videos.length && data.__type === "GraphVideo" && data.video_url) videos.push(data.video_url);
+                if (!videos.length && data.__type === "GraphSidecar") {
+                    for (let item of data.items || []) {
+                        if (item.__type === "GraphVideo" && item.video_url) videos.push(item.video_url);
+                        else if (item.display_url) images.push(item.display_url);
+                    }
+                }
+                if (!videos.length && data.display_url) images.push(data.display_url);
+
+                return { urls: [...videos, ...images], caption };
+            } catch (parseError) {
+                console.error("❌ Parsing Error:", parseError);
+            }
         }
     } catch (error) {
         console.error("❌ Instagram Error:", error);
