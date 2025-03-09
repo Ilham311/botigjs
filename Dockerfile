@@ -10,6 +10,7 @@ COPY package*.json ./
 # Install dependencies aplikasi
 RUN npm install
 RUN npm install dotenv
+RUN npm install crypto
 
 # Salin semua file dari direktori lokal ke dalam direktori kerja di container
 COPY . .
