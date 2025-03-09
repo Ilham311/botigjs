@@ -46,7 +46,12 @@ async function downloadAndUpload(ctx, mediaUrls, caption = "") {
             const response = await axios({
                 url: mediaUrls[i],
                 method: 'GET',
-                responseType: 'stream'
+                responseType: 'stream',
+                headers: {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, seperti Gecko) Chrome/91.0.4472.124 Safari/537.36",
+                    "Referer": "https://www.google.com/",
+                    "Accept": "*/*"
+                }
             });
 
             const contentType = response.headers['content-type'];
@@ -98,6 +103,7 @@ async function downloadAndUpload(ctx, mediaUrls, caption = "") {
     // Hapus file setelah dikirim
     mediaFiles.forEach(file => fs.unlinkSync(file.filePath));
 }
+
 
 
 // Handler Command
