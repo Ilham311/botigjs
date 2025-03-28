@@ -95,33 +95,34 @@ bot.command(['ig', 'fb', 'tw', 'tt'], async (ctx) => {
 
 async function getInstagramMedia(instagramUrl) {
     try {
-        const response = await axios.get("https://api.snapx.info/v1/instagram", {
-            headers: {
-                "User-Agent": "Mozilla/5.0",
-                "x-app-id": "24340030",
-                "x-app-token": "eyJhbGciOiJIUzI1NiJ9.eyJleHAiOiIxNzI2NzgwODQwNzExIn0.5M65C_Rz_C3H4mkIQ3WvgfrpqD6lJmeDc-CK3x_Lbfw"
-            },
-            params: { url: instagramUrl }
-        });
+        const response = await axios.post("https://social-download-all-in-one.p.rapidapi.com/v1/social/autolink", 
+            { url: instagramUrl }, 
+            {
+                headers: {
+                    "Content-Type": "application/json",
+                    "x-rapidapi-key": "b4204bb183mshbb02c6962ce881cp12a248jsn8a474bf78237",
+                    "x-rapidapi-host": "social-download-all-in-one.p.rapidapi.com"
+                }
+            }
+        );
 
         if (response.status === 200) {
-            const data = response.data.data || {};
+            const data = response.data || {};
+            const caption = data.title || "Tidak ada caption.";
             let mediaUrls = [];
 
-            if (data.video_url) mediaUrls.push(data.video_url);
-            if (!mediaUrls.length && data.__type === "GraphSidecar") {
-                (data.items || []).forEach(item => {
-                    if (item.__type === "GraphVideo" && item.video_url) mediaUrls.push(item.video_url);
-                    else if (item.display_url) mediaUrls.push(item.display_url);
+            if (Array.isArray(data.medias)) {
+                data.medias.forEach(media => {
+                    if (media.url) mediaUrls.push(media.url);
                 });
             }
-            if (!mediaUrls.length && data.display_url) mediaUrls.push(data.display_url);
-            return { urls: mediaUrls, caption: data.title || "Tidak ada caption." };
+
+            return { urls: mediaUrls, caption };
         }
     } catch (error) {
         console.error("❌ Instagram Error:", error);
     }
-    return { urls: [] };
+    return { urls: [], caption: "Tidak ada caption." };
 }
 
 async function getFacebookVideoUrl(fbUrl) {
