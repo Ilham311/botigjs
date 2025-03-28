@@ -54,12 +54,14 @@ async function downloadAndUpload(ctx, mediaUrls, caption = "") {
                 await ctx.replyWithVideo({ source: mediaFiles[0].filePath }, { caption });
             }
         } else {
-            let mediaGroup = mediaFiles.map((file, index) => ({
-                type: file.type,
-                media: { source: file.filePath },
-                caption: index === 0 ? caption : ""
-            }));
-            await ctx.replyWithMediaGroup(mediaGroup);
+            for (let i = 0; i < mediaFiles.length; i += 10) {
+                let batch = mediaFiles.slice(i, i + 10).map((file, index) => ({
+                    type: file.type,
+                    media: { source: file.filePath },
+                    caption: i === 0 && index === 0 ? caption : ""
+                }));
+                await ctx.replyWithMediaGroup(batch);
+            }
         }
     } catch (error) {
         console.error("❌ Upload error:", error);
