@@ -99,7 +99,7 @@ async function getInstagramMedia(instagramUrl) {
             { url: instagramUrl }, 
             {
                 headers: {
-                    "Content-Type": "application/json",
+                    "content-type": "application/json",
                     "x-rapidapi-key": "b4204bb183mshbb02c6962ce881cp12a248jsn8a474bf78237",
                     "x-rapidapi-host": "social-download-all-in-one.p.rapidapi.com"
                 }
@@ -107,22 +107,17 @@ async function getInstagramMedia(instagramUrl) {
         );
 
         if (response.status === 200) {
-            const data = response.data || {};
-            const caption = data.title || "Tidak ada caption.";
-            let mediaUrls = [];
-
-            if (Array.isArray(data.medias)) {
-                data.medias.forEach(media => {
-                    if (media.url) mediaUrls.push(media.url);
-                });
-            }
-
-            return { urls: mediaUrls, caption };
+            const data = response.data;
+            const caption = data.title || "Tidak ada caption";
+            const videos = data.medias?.filter(m => m.type === "video").map(m => m.url) || [];
+            const images = data.medias?.filter(m => m.type === "image").map(m => m.url) || [];
+            
+            return { urls: [...videos, ...images], caption };
         }
     } catch (error) {
         console.error("❌ Instagram Error:", error);
     }
-    return { urls: [], caption: "Tidak ada caption." };
+    return { urls: [] };
 }
 
 async function getFacebookVideoUrl(fbUrl) {
