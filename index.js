@@ -22,6 +22,8 @@ async function healthCheck() {
 }
 setInterval(healthCheck, 100000);
 
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 async function downloadAndUpload(ctx, mediaUrls, caption = "") {
     caption = caption.substring(0, 1024);
     let mediaFiles = [];
@@ -60,7 +62,9 @@ async function downloadAndUpload(ctx, mediaUrls, caption = "") {
                     media: { source: file.filePath },
                     caption: i === 0 && index === 0 ? caption : ""
                 }));
+
                 await ctx.replyWithMediaGroup(batch);
+                await delay(3000);
             }
         }
     } catch (error) {
@@ -68,8 +72,11 @@ async function downloadAndUpload(ctx, mediaUrls, caption = "") {
         await ctx.reply("⚠️ Gagal mengupload media.");
     }
 
-    mediaFiles.forEach(file => fs.unlinkSync(file.filePath));
+    mediaFiles.forEach(file => {
+        if (fs.existsSync(file.filePath)) fs.unlinkSync(file.filePath);
+    });
 }
+
 
 bot.command(['ig', 'fb', 'tw', 'tt'], async (ctx) => {
     try {
